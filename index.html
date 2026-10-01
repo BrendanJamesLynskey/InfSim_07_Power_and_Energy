@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Inference Simulators 07 — Power &amp; Energy in Inference Simulators</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Geist+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #1c1815;
+            --bg-card: #231e1a;
+            --bg-code: #2b2520;
+            --text-primary: #efe8dc;
+            --text-secondary: #a2978b;
+            --accent: #aabd59;
+            --accent-dim: #aabd5944;
+            --accent-glow: #aabd5933;
+            --border: #3a322b;
+            --font-display: 'Bricolage Grotesque', sans-serif;
+            --font-mono: 'Geist Mono', 'Geist Mono', monospace;
+            --font-body: 'Instrument Sans', sans-serif;
+            --max-width: 900px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 17px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        /* ── Header ── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .hero > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .series-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 .accent {
+            color: var(--accent);
+        }
+
+        .hero .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+
+        /* ── Tag Pills ── */
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .tag {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+            white-space: nowrap;
+        }
+
+        /* ── Pipeline Flow Bar ── */
+        .pipeline {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            max-width: var(--max-width);
+        }
+
+        .pipeline-step {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .pipeline-arrow {
+            color: var(--accent);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        /* ── Slides ── */
+        .slide {
+            min-height: 100vh;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .slide-number {
+            font-family: var(--font-display);
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--accent-dim);
+            position: absolute;
+            top: 2rem;
+            right: 1.5rem;
+            line-height: 1;
+            user-select: none;
+        }
+
+        .slide h2 {
+            font-family: var(--font-display);
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            line-height: 1.25;
+        }
+
+        .slide h3 {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .slide p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .slide p strong {
+            color: var(--text-primary);
+        }
+
+        .slide ul, .slide ol {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .slide li {
+            margin-bottom: 0.4rem;
+        }
+
+        .slide li strong {
+            color: var(--text-primary);
+        }
+
+        /* ── Code Blocks ── */
+        .code-block {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.25rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(170,189,89,0.08);
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #dad1c5;
+        }
+
+        /* Syntax highlighting (manual) */
+        .kw { color: #de805a; }
+        .fn { color: #d7bbdf; }
+        .str { color: #bcdbd4; }
+        .cm { color: #a2978b; font-style: italic; }
+        .num { color: #97cdc6; }
+        .type { color: #e3b174; }
+        .dir { color: #de805a; }
+        .mac { color: #e3b174; }
+
+        /* ── Tables ── */
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.25rem 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: var(--bg-code);
+            color: var(--accent);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--font-display);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:nth-child(even) td {
+            background: rgba(35,30,26,0.5);
+        }
+
+        /* ── Diagrams ── */
+        .diagram-flow {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-box {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .diagram-box.accent {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(170,189,89,0.08);
+        }
+
+        .diagram-box.dim {
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+
+        .diagram-arrow {
+            color: var(--accent);
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        /* Vertical flow diagrams */
+        .diagram-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-vertical .diagram-arrow {
+            font-size: 1.1rem;
+        }
+
+        /* Nested hierarchy diagram */
+        .hierarchy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .hierarchy-level {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .hierarchy-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .hierarchy-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+
+        .hierarchy-item {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .hierarchy-item.accent {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(170,189,89,0.08);
+        }
+
+        /* Grid diagram */
+        .diagram-grid {
+            display: grid;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-grid.cols-2 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .diagram-grid.cols-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .diagram-panel {
+            padding: 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .diagram-panel.accent-border {
+            border-left: 3px solid var(--accent);
+        }
+
+        .diagram-panel h4 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .diagram-panel p, .diagram-panel ul {
+            font-size: 0.85rem;
+        }
+
+        /* ── Callout Boxes ── */
+        .callout {
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 1rem 1.25rem;
+            margin: 1.25rem 0;
+        }
+
+        .callout p {
+            margin-bottom: 0;
+        }
+
+        .callout .callout-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.3rem;
+        }
+
+        /* ── Tier Visual ── */
+        .tier-visual {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .tier-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .tier-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 90px;
+            text-align: right;
+        }
+
+        .tier-fill {
+            height: 32px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            white-space: nowrap;
+            transition: width 0.6s ease;
+        }
+
+        .tier-cost {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            min-width: 70px;
+        }
+
+        /* ── Contents list ── */
+        .contents-list {
+            list-style: none;
+            padding-left: 0;
+            counter-reset: contents;
+        }
+
+        .contents-list li {
+            counter-increment: contents;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .contents-list li:last-child {
+            border-bottom: none;
+        }
+
+        .contents-list li::before {
+            content: counter(contents, decimal-leading-zero);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 2rem;
+        }
+
+        .contents-list a {
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .contents-list a:hover {
+            color: var(--accent);
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+
+        .footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .slide {
+                padding: 3rem 1rem;
+                min-height: auto;
+            }
+
+            .slide-number {
+                font-size: 3rem;
+                top: 1.5rem;
+                right: 1rem;
+            }
+
+            .slide h2 {
+                font-size: 1.5rem;
+            }
+
+            .diagram-grid.cols-2,
+            .diagram-grid.cols-3 {
+                grid-template-columns: 1fr;
+            }
+
+            .pipeline {
+                gap: 0.15rem;
+            }
+
+            .pipeline-step {
+                font-size: 0.6rem;
+                padding: 0.2rem 0.4rem;
+            }
+
+            .hero h1 {
+                font-size: 1.8rem;
+            }
+
+            table {
+                font-size: 0.78rem;
+            }
+
+            .tier-label {
+                min-width: 60px;
+                font-size: 0.65rem;
+            }
+
+            .tier-fill {
+                font-size: 0.6rem;
+                height: 26px;
+            }
+        }
+
+        /* ── Interactive controls (added for Local LLM series) ── */
+        .control-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1.25rem 0;
+        }
+        .control-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .control-row label {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            min-width: 180px;
+        }
+        .control-row input[type="range"] {
+            flex: 1;
+            min-width: 160px;
+            accent-color: var(--accent);
+        }
+        .control-row input[type="number"],
+        .control-row select {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 4px;
+            padding: 0.3rem 0.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+        }
+        .control-row .val {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 80px;
+            text-align: right;
+        }
+        .btn {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 0.4rem 0.9rem;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .btn:hover { background: rgba(170,189,89,0.2); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn.secondary {
+            background: var(--bg-code);
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+        .result-box {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: 4px;
+            padding: 0.75rem 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            margin-top: 0.75rem;
+        }
+        .result-box .line-label { color: var(--text-secondary); }
+        .result-box .line-val   { color: var(--accent); font-weight: 600; }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        .metric {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.6rem 0.8rem;
+            text-align: center;
+        }
+        .metric .metric-label {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .metric .metric-value {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            color: var(--accent);
+            font-weight: 600;
+            margin-top: 0.2rem;
+        }
+
+        /* Canvas / SVG containers */
+        .canvas-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
+        .canvas-wrap canvas,
+        .canvas-wrap svg {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+
+        /* Small inline badge */
+        .badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
+        .badge.ok    { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .badge.warn  { border-color: #e3b174; color: #e3b174; background: rgba(227,177,116,0.08); }
+        .badge.bad   { border-color: #de805a; color: #de805a; background: rgba(222,128,90,0.08); }
+
+
+        /* ── LLM Inference Simulators additions ── */
+        .canvas-wrap canvas { image-rendering: auto; display: block; width: 100%; height: auto; }
+        .canvas-wrap svg { max-width: 100%; height: auto; }
+        .ladder { display: grid; gap: 0.4rem; margin: 1.25rem 0; }
+        .ladder-row {
+            display: grid; grid-template-columns: 11rem 1fr 7.5rem; gap: 0.75rem; align-items: center;
+            background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+            padding: 0.55rem 0.85rem; font-size: 0.88rem;
+        }
+        .ladder-row .rung { font-family: var(--font-display); font-weight: 600; color: var(--accent); }
+        .ladder-row .speed { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary); text-align: right; }
+        .res-list { list-style: none; padding: 0; margin: 0.75rem 0; }
+        .res-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.92rem; }
+        .res-list li:last-child { border-bottom: none; }
+        .res-list .what { color: var(--text-secondary); display: block; font-size: 0.86rem; margin-top: 0.15rem; }
+        .res-list a { color: var(--accent); text-decoration: none; }
+        .res-list a:hover { text-decoration: underline; }
+        .qa { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; margin: 0.6rem 0; padding: 0.2rem 1rem; }
+        .qa summary { cursor: pointer; padding: 0.6rem 0; font-weight: 600; }
+        .qa p, .qa ul { margin-bottom: 0.75rem; font-size: 0.92rem; }
+        .sim-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.4rem 1.25rem; }
+        .chart-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+        .chart-title { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.3rem; }
+        .slide a { color: var(--accent); }
+        @media (max-width: 640px) {
+            .ladder-row { grid-template-columns: 1fr; gap: 0.2rem; }
+            .ladder-row .speed { text-align: left; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <div class="series-label">LLM Inference Simulators &mdash; Presentation 07</div>
+    <h1><span class="accent">Power &amp; Energy</span> in Inference Simulators</h1>
+    <p class="subtitle">Speed is half of performance. Static and dynamic power, why data movement dominates energy, the simulator's calibrated power model, prefill running hot and decode cool, DVFS and power caps as a third roof, energy proportionality, the link to RTL power and thermal analysis, and what photonic systems must pay for &mdash; all measured on the companion simulator.</p>
+
+    <div class="tags">
+        <span class="tag">Joules per token</span>
+        <span class="tag">DVFS</span>
+        <span class="tag">Power caps</span>
+        <span class="tag">Static power</span>
+        <span class="tag">RTL power</span>
+        <span class="tag">Photonics</span>
+    </div>
+
+    <div class="pipeline">
+        <span class="pipeline-step">Static</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Dynamic</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Data movement</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">DVFS</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Caps</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">J/token</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">Why Power Is a First-Class Simulator Output</a></li>
+        <li><a href="#slide-02">Where the Joules Go: Static, Dynamic, and Data Movement</a></li>
+        <li><a href="#slide-03">The Simulator's Power Model</a></li>
+        <li><a href="#slide-04">Prefill Runs Hot, Decode Runs Cool</a></li>
+        <li><a href="#slide-05">DVFS and Power Caps: The Third Roof</a></li>
+        <li><a href="#slide-06">Interactive: One Step Under a Power Cap</a></li>
+        <li><a href="#slide-07">System Results: Latency Against Energy</a></li>
+        <li><a href="#slide-08">Energy Proportionality: Static Power and Load</a></li>
+        <li><a href="#slide-09">From the Simulator to RTL Power and Thermal Analysis</a></li>
+        <li><a href="#slide-10">Power in Photonic and Novel Compute</a></li>
+        <li><a href="#slide-11">The Datacentre View</a></li>
+        <li><a href="#slide-12">Power Metrics Checklist</a></li>
+        <li><a href="#slide-13">What to Take Away</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>Why Power Is a First-Class Simulator Output</h2>
+    <p>Speed is only half of performance. For AI hardware the other half is <strong>power and energy</strong>, and it is often the half that decides the product.</p>
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Why it matters</h4>
+            <ul>
+                <li><strong>Datacentres are power-limited.</strong> New AI capacity is constrained by available megawatts and cooling at least as much as by chips.</li>
+                <li><strong>Energy is running cost.</strong> Over a deployment's life, electricity and cooling are a large share of total cost of ownership.</li>
+                <li><strong>Power sets the package.</strong> Board limits (TDP), power delivery, current density and cooling are fixed early and are expensive to change.</li>
+                <li><strong>Efficiency is the pitch.</strong> Novel compute, photonics included, usually competes on performance per watt rather than raw speed.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Questions the simulator must answer</h4>
+            <ul>
+                <li>What are the average and peak power for this workload?</li>
+                <li>How many joules per output token, and where do they go?</li>
+                <li>What happens to latency under a power cap?</li>
+                <li>Which phase can be throttled for free?</li>
+                <li>How does energy per token change with load?</li>
+                <li>Is the design limited by compute, memory, or power?</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>Where the Joules Go: Static, Dynamic, and Data Movement</h2>
+    <div class="code-block">
+        <div class="code-header">CMOS power, first order</div>
+        <pre><code>P = P_static + P_dynamic
+P_static  &asymp; V &middot; I_leak                 <span class="cm"># leakage, clocks, always-on logic: paid whenever powered</span>
+P_dynamic &asymp; &alpha; &middot; C &middot; V&sup2; &middot; f               <span class="cm"># switching: activity x capacitance x voltage^2 x frequency</span>
+E_op      &asymp; &alpha; &middot; C &middot; V&sup2;                   <span class="cm"># energy per operation: why lowering V (with f) pays quadratically</span></code></pre>
+    </div>
+    <p>Horowitz's widely cited energy table (ISSCC 2014, 45 nm) makes the key point: <strong>moving data costs far more than computing on it</strong>.</p>
+    <div class="table-wrap">
+    <table>
+        <tr><th>Operation (45 nm)</th><th>Energy</th><th>Relative to an 8-bit add</th></tr>
+        <tr><td>8-bit integer add</td><td>0.03 pJ</td><td>1&times;</td></tr>
+        <tr><td>32-bit float multiply</td><td>3.7 pJ</td><td>~120&times;</td></tr>
+        <tr><td>64-bit read from an 8 KB SRAM</td><td>10 pJ</td><td>~330&times;</td></tr>
+        <tr><td>64-bit read from DRAM</td><td>1.3&ndash;2.6 nJ</td><td>~40,000&ndash;90,000&times;</td></tr>
+    </table>
+    </div>
+    <p>Absolute values have fallen at newer nodes, but the ratios still hold. This is why the simulator charges separately for FLOPs and for HBM bytes, and why decode, which streams every weight on every step, is an energy problem as well as a bandwidth problem.</p>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>The Simulator's Power Model</h2>
+    <p>Four coefficients per device and one per link, attached to the same FLOP and byte counts the roofline already computes. Nothing new is counted; it is only priced.</p>
+    <div class="code-block">
+        <div class="code-header">Energy of a run</div>
+        <pre><code>E_total = &Sigma;<sub>instances</sub> idle_W &middot; T_run                    <span class="cm"># static: charged busy or not</span>
+        + &Sigma;<sub>steps</sub> (FLOPs &middot; pJ/FLOP &middot; s&sup2; + HBM bytes &middot; pJ/byte)   <span class="cm"># dynamic, with DVFS factor s</span>
+        + &Sigma;<sub>transfers</sub> KV bits &middot; pJ/bit                     <span class="cm"># interconnect</span>
+P_step  = idle_W + E_step / t_step                       <span class="cm"># tracked for the peak</span></code></pre>
+    </div>
+    <div class="table-wrap">
+    <table>
+        <tr><th>Device (illustrative)</th><th>TDP</th><th>Idle</th><th>pJ / FLOP</th><th>pJ / HBM byte</th></tr>
+        <tr><td>H100-SXM</td><td>700 W</td><td>100 W</td><td>1.0</td><td>60</td></tr>
+        <tr><td>A100-SXM</td><td>400 W</td><td>60 W</td><td>1.6</td><td>70</td></tr>
+        <tr><td>Hypothetical optical MAC</td><td>700 W</td><td>180 W</td><td>0.1</td><td>60</td></tr>
+        <tr><td>Links (pJ/bit)</td><td colspan="4">NVLink 5 &middot; PCIe 6 &middot; InfiniBand / Ethernet 15 (SerDes, NIC and switch together)</td></tr>
+    </table>
+    </div>
+    <div class="callout">
+        <div class="callout-label">Calibrate, don't trust</div>
+        <p>These coefficients are chosen to give realistic totals (prefill near TDP, decode around 300 W per H100). To calibrate for real hardware, run micro-benchmarks that sweep FLOP rate and byte rate independently, read power with DCGM or <code>nvidia-smi</code>, and fit <code>P &minus; idle = a&middot;FLOP/s + b&middot;byte/s</code> by least squares. <em>a</em> and <em>b</em> are your pJ/FLOP and pJ/byte. For pre-silicon hardware the same coefficients come from RTL power analysis of the blocks (slide 09).</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>Prefill Runs Hot, Decode Runs Cool</h2>
+    <p>Per step, Llama-3-70B on 4&times;H100, from the simulator's cost model:</p>
+    <div class="table-wrap">
+    <table>
+        <tr><th>Step</th><th>Bound</th><th>Time</th><th>Power per device</th><th>Dynamic energy</th></tr>
+        <tr><td>Prefill, 2,048-token prompt</td><td>compute</td><td>133.9 ms</td><td><strong>658 W</strong> (near the 700 W TDP)</td><td>~290 J</td></tr>
+        <tr><td>Decode, batch 16, ~2.3k context</td><td>memory</td><td>14.8 ms</td><td><strong>295 W</strong></td><td>11.5 J</td></tr>
+        <tr><td>Decode, same, with DVFS</td><td>memory</td><td>14.8 ms</td><td><strong>262 W</strong></td><td>9.6 J</td></tr>
+    </table>
+    </div>
+    <ul>
+        <li><strong>Compute-bound phases draw near-maximum power</strong>; every FLOP unit is switching.</li>
+        <li><strong>Memory-bound phases leave compute idle much of the time.</strong> The arithmetic units wait for HBM, so dynamic power is dominated by data movement.</li>
+        <li><strong>So decode has slack:</strong> the compute clock can drop until compute just keeps pace with memory, saving about 17% of decode's dynamic energy at no cost in time.</li>
+        <li><strong>Disaggregation makes this exploitable.</strong> On colocated machines the phases interleave, so the power setting must suit prefill. With separate pools, each pool gets its own power policy. Splitwise proposed exactly this: power-capped token machines.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>DVFS and Power Caps: The Third Roof</h2>
+    <p>Dynamic voltage and frequency scaling lowers the clock (and with it the voltage). In the model the compute clock runs at a fraction <em>s</em> of nominal; HBM is unaffected.</p>
+    <div class="code-block">
+        <div class="code-header">hardware.py, CostModel.step_time</div>
+        <pre><code>t(s) = max(tc / s, tm)                <span class="cm"># compute slows; memory doesn't</span>
+E(s) = Ec &middot; s&sup2; + Em                    <span class="cm"># V tracks f, so energy per op ~ s^2</span>
+P(s) = idle + E(s) / t(s)             <span class="cm"># increases with s: lower clocks always reduce power</span>
+
+dvfs on:     memory-bound step  &rarr;  s = max(s_min, tc/tm)        <span class="cm"># same time, less energy</span>
+power cap:   choose the largest s with P(s) &le; cap                   <span class="cm"># closed form: sqrt, or a cubic (Cardano)</span>
+             still too hot at s_min &rarr; stretch the step to fit the budget</code></pre>
+    </div>
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border"><h4>Compute roof</h4><p>Not enough FLOP/s. Prefill.</p></div>
+        <div class="diagram-panel accent-border"><h4>Memory roof</h4><p>Not enough bytes/s. Decode.</p></div>
+        <div class="diagram-panel accent-border"><h4>Power roof</h4><p>Not enough watts. A capped prefill: the work could go faster, but not without exceeding the cap.</p></div>
+    </div>
+    <p>The simulator labels each step with whichever roof bound it and reports the fraction of busy time spent power-bound. Real DVFS has discrete operating points, voltage floors and transition latency; the continuous model is a first-order stand-in to refine when the hardware's operating points are known.</p>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>Interactive: One Step Under a Power Cap</h2>
+    <p>This uses the simulator's own cost model (the browser engine from deck 05). Pick a step, then move the per-device cap and toggle DVFS. The chart sweeps the cap from TDP down to just above idle and plots time against energy: the <strong>energy&ndash;delay trade-off</strong>.</p>
+    <div class="control-panel">
+        <div class="sim-grid">
+            <div class="control-row"><label for="pw-dev">Device</label><select id="pw-dev"><option value="h100" selected>H100-SXM</option><option value="a100">A100-SXM</option><option value="optical">Hypothetical optical MAC</option></select></div>
+            <div class="control-row"><label for="pw-kind">Step</label><select id="pw-kind"><option value="prefill" selected>Prefill (one prompt)</option><option value="decode">Decode (a batch)</option></select></div>
+            <div class="control-row"><label for="pw-size">Prompt / batch size</label><input type="range" id="pw-size" min="0" max="7" value="4"><span class="val" id="pw-size-val">2048</span></div>
+            <div class="control-row"><label for="pw-cap">Cap per device (W)</label><input type="range" id="pw-cap" min="110" max="700" step="10" value="700"><span class="val" id="pw-cap-val">700</span></div>
+            <div class="control-row"><label for="pw-dvfs">DVFS on memory-bound steps</label><select id="pw-dvfs"><option value="0">off</option><option value="1" selected>on</option></select></div>
+        </div>
+        <div class="metric-grid">
+            <div class="metric"><div class="metric-label">Step time</div><div class="metric-value" id="pw-t">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">Power / device</div><div class="metric-value" id="pw-p">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">Dynamic energy</div><div class="metric-value" id="pw-e">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">Bound</div><div class="metric-value" id="pw-b">&mdash;</div></div>
+        </div>
+        <div class="canvas-wrap" style="padding:0.4rem;"><canvas id="pw-canvas" width="840" height="300"></canvas></div>
+    </div>
+<script id="sim-engine">
+// disagg-sim, JavaScript port of Disaggregated_Inference_Sim (SimPy).
+// Same cost model, same scheduling rules, same metrics; a hand-written
+// event heap stands in for SimPy's environment.
+(function (root) {
+    const MODELS = {
+        'llama3-8b':  { name: 'Llama-3-8B',  L: 32, d: 4096, h: 32, kvh: 8, ff: 14336, V: 128256 },
+        'llama3-70b': { name: 'Llama-3-70B', L: 80, d: 8192, h: 64, kvh: 8, ff: 28672, V: 128256 },
+    };
+    const DEVICES = {
+        // idle W, dynamic pJ/FLOP and pJ/HBM-byte: illustrative, as in hardware.py
+        h100:    { name: 'H100-SXM', F: 989e12,  B: 3.35e12,  M: 80e9, fe: 0.55, be: 0.8, tdp: 700, idle: 100, pjF: 1.0, pjB: 60 },
+        a100:    { name: 'A100-SXM', F: 312e12,  B: 2.039e12, M: 80e9, fe: 0.55, be: 0.8, tdp: 400, idle: 60,  pjF: 1.6, pjB: 70 },
+        optical: { name: 'Hypothetical optical MAC', F: 4000e12, B: 3.35e12, M: 80e9, fe: 0.4, be: 0.8, tdp: 700, idle: 180, pjF: 0.1, pjB: 60 },
+    };
+    const LINKS = {
+        'nvlink4':  { name: 'NVLink 4',      bw: 450e9,   lat: 5e-6,  pjBit: 5 },
+        'ib-ndr':   { name: 'IB NDR 400G',   bw: 50e9,    lat: 10e-6, pjBit: 15 },
+        'pcie5':    { name: 'PCIe Gen5 x16', bw: 64e9,    lat: 5e-6,  pjBit: 6 },
+        'eth-100g': { name: '100 GbE',       bw: 12.5e9,  lat: 20e-6, pjBit: 15 },
+        'eth-25g':  { name: '25 GbE',        bw: 3.125e9, lat: 20e-6, pjBit: 15 },
+    };
+    const STAGES = ['prefill_queue', 'prefill', 'kv_wait', 'kv_transfer', 'decode_queue', 'decode'];
+    const OWNER = { prefill_queue: 'prefill', prefill: 'prefill', kv_wait: 'kv-link',
+                    kv_transfer: 'kv-link', decode_queue: 'decode', decode: 'decode' };
+
+    function derive(m) {
+        const hd = m.d / m.h, kv = m.kvh * hd;
+        const ppl = 2 * m.d * m.d + 2 * m.d * kv + 3 * m.d * m.ff;
+        return { ...m, params: m.L * ppl + 2 * m.V * m.d, matmul: m.L * ppl + m.V * m.d,
+                 weightBytes: 2 * (m.L * ppl + 2 * m.V * m.d), kvTok: 2 * m.L * kv * 2 };
+    }
+
+    const cbrt = x => Math.sign(x) * Math.pow(Math.abs(x), 1 / 3);
+    function costModel(model, dev, n, overhead, powerCap, dvfs, sMin) {
+        const Fr = dev.F * dev.fe * n, Br = dev.B * dev.be * n;
+        const jF = dev.pjF * 1e-12, jB = dev.pjB * 1e-12, idleW = dev.idle * n;
+        const cap = Math.min(powerCap ?? Infinity, dev.tdp);       // the board limit always applies
+        const budget = (cap - dev.idle) * n;
+        if (budget !== null && budget <= 0) throw new Error('power cap is below idle power');
+        sMin = sMin ?? 0.4;
+        // DVFS three-roof step model: mirror of CostModel.step_time in hardware.py
+        const t = (flops, bytes) => {
+            const tc = flops / Fr, tm = bytes / Br;
+            let ec = flops * jF; const em = bytes * jB;
+            let s = (dvfs && tc < tm) ? Math.max(sMin, tc / tm) : 1.0;
+            let bound = tc >= tm ? 'compute' : 'memory';
+            if (budget !== null && (ec * s * s + em) / Math.max(tc / s, tm) > budget) {
+                bound = 'power';
+                const x = (budget * tm - em) / ec;
+                if (x > 0 && Math.sqrt(x) * tm >= tc) s = Math.min(s, Math.sqrt(x));
+                else {
+                    const p = em / ec, q = -budget * tc / ec, r = Math.sqrt(q * q / 4 + p * p * p / 27);
+                    s = cbrt(-q / 2 + r) + cbrt(-q / 2 - r);
+                }
+                s = Math.max(s, sMin);
+            }
+            let time = Math.max(tc / s, tm);
+            ec = ec * s * s;
+            if (budget !== null && (ec + em) / time > budget) time = (ec + em) / budget;
+            return { flops, bytes, time: time + overhead, bound, ec, em };
+        };
+        return {
+            idleW,
+            kvCap: Math.floor((dev.M * n * 0.9 - model.weightBytes) / model.kvTok),
+            prefill(lens) {
+                let tok = 0, fl = 0;
+                for (const s of lens) { tok += s; fl += 2 * model.L * model.d * s * (s + 1); }
+                return t(2 * model.matmul * tok + fl, model.weightBytes + tok * model.kvTok);
+            },
+            decode(ctx) {
+                let c = 0; for (const x of ctx) c += x;
+                const b = ctx.length;
+                return t(2 * model.matmul * b + 4 * model.L * model.d * c, model.weightBytes + (c + b) * model.kvTok);
+            },
+        };
+    }
+
+    // ── workload ───────────────────────────────────────────────────────
+    function mulberry32(a) {
+        return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    }
+    function makeWorkload(rate, n, prompt, promptCv, output, outputCv, seed) {
+        const r = mulberry32(seed || 1);
+        const normal = () => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+        const len = (mean, cv) => {
+            if (cv <= 0) return Math.round(mean);
+            const s2 = Math.log(1 + cv * cv);
+            const x = Math.exp(Math.log(mean) - s2 / 2 + Math.sqrt(s2) * normal());
+            return Math.min(32768, Math.max(1, Math.round(x)));
+        };
+        const out = []; let t = 0;
+        for (let i = 0; i < n; i++) {
+            t += -Math.log(1 - r()) / rate;
+            out.push([t, len(prompt, promptCv), len(output, outputCv)]);
+        }
+        return out;
+    }
+
+    // ── engine ─────────────────────────────────────────────────────────
+    function simulate(cfg, rows) {
+        const model = derive(MODELS[cfg.model]), dev = DEVICES[cfg.device];
+        const link = { ...LINKS[cfg.link], ch: cfg.linkChannels || 1 };
+        const capFor = role => (role === 'prefill' ? cfg.prefillPowerCap : role === 'decode' ? cfg.decodePowerCap : null) ?? cfg.powerCap ?? null;
+        const cmFor = role => costModel(model, dev, cfg.devicesPerInstance, cfg.stepOverhead ?? 0.5e-3, capFor(role), !!cfg.dvfs);
+        const cm = cmFor('colocated');
+        const maxPT = cfg.maxPrefillTokens || 8192, maxB = cfg.maxDecodeBatch || 256;
+
+        let now = 0, seq = 0, nDone = 0, nRej = 0, stop = false;
+        const heap = [];
+        const push = (t, f) => {
+            const e = [t, seq++, f]; heap.push(e);
+            let i = heap.length - 1;
+            while (i > 0) { const p = (i - 1) >> 1;
+                if (heap[p][0] < e[0] || (heap[p][0] === e[0] && heap[p][1] < e[1])) break;
+                heap[i] = heap[p]; i = p; }
+            heap[i] = e;
+        };
+        const pop = () => {
+            const top = heap[0], last = heap.pop();
+            if (heap.length) { let i = 0; const n = heap.length;
+                for (;;) { let l = 2 * i + 1, r = l + 1, m = i;
+                    const less = (a, b) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
+                    if (l < n && less(heap[l], m === i ? last : heap[m])) m = l;
+                    if (r < n && less(heap[r], m === i ? last : heap[m])) m = r;
+                    if (m === i) break; heap[i] = heap[m]; i = m; }
+                heap[i] = last; }
+            return top;
+        };
+
+        const reqs = rows.map(([a, p, o], i) => ({ rid: i, arrival: a, prompt: p, output: o,
+            prefillStart: null, firstToken: null, kvStart: null, kvReady: null, decodeStart: null,
+            finish: null, tokensOut: 0, lastToken: null, itls: [] }));
+        const samples = [];
+
+        function mkInst(role, idx) {
+            return { role, name: `${role}-${idx}`, queue: [], running: [], kvUsed: 0, busy: 0, steps: 0,
+                     flops: 0, bytes: 0, batchSum: 0, active: false, wake: false, cm: cmFor(role),
+                     ec: 0, em: 0, peakW: 0, powerBound: 0 };
+        }
+        const prefill = [], decode = [], coloc = [];
+        if (cfg.mode === 'disagg') {
+            for (let i = 0; i < cfg.nPrefill; i++) prefill.push(mkInst('prefill', i));
+            for (let i = 0; i < cfg.nDecode; i++) decode.push(mkInst('decode', i));
+        } else for (let i = 0; i < cfg.nColocated; i++) coloc.push(mkInst('colocated', i));
+        const insts = [...prefill, ...decode, ...coloc];
+        const ls = { busy: 0, bytes: 0, transfers: 0, wait: 0, inUse: 0, queue: [], energy: 0 };
+
+        const kvNeed = r => r.prompt + r.output;
+        const load = i => i.role === 'prefill' ? i.queue.reduce((s, r) => s + r.prompt, 0) : i.queue.length + i.running.length;
+        const pick = arr => arr.reduce((b, i) => load(i) < load(b) ? i : b, arr[0]);
+
+        function finish(r) { r.finish = now; nDone++; if (nDone + nRej === reqs.length) stop = true; }
+        function submit(inst, r) {
+            inst.queue.push(r);
+            if (!inst.active && !inst.wake) { inst.wake = true; push(now, () => { inst.wake = false; loop(inst); }); }
+        }
+        function step(inst, cost, batch, then) {
+            inst.active = true;
+            push(now + cost.time, () => {
+                inst.busy += cost.time; inst.steps++; inst.flops += cost.flops; inst.bytes += cost.bytes;
+                inst.batchSum += batch; inst.ec += cost.ec; inst.em += cost.em;
+                const pw = inst.cm.idleW + (cost.ec + cost.em) / cost.time; if (pw > inst.peakW) inst.peakW = pw;
+                if (cost.bound === 'power') inst.powerBound += cost.time;
+                inst.active = false; then(); loop(inst);
+            });
+        }
+        function firstToken(r) { r.firstToken = r.lastToken = now; r.tokensOut = 1; }
+        function decodeDone(inst) {
+            const still = [];
+            for (const r of inst.running) {
+                r.itls.push(now - r.lastToken); r.tokensOut++; r.lastToken = now;
+                if (r.tokensOut >= r.output) { inst.kvUsed -= kvNeed(r); finish(r); } else still.push(r);
+            }
+            inst.running = still;
+        }
+        function decodeOnce(inst) {
+            const ctx = inst.running.map(r => r.prompt + r.tokensOut);
+            step(inst, inst.cm.decode(ctx), ctx.length, () => decodeDone(inst));
+        }
+        function loop(inst) {
+            if (inst.active) return;
+            if (inst.role === 'prefill') {
+                if (!inst.queue.length) return;
+                const batch = []; let tok = 0;
+                while (inst.queue.length && (!batch.length || tok + inst.queue[0].prompt <= maxPT)) {
+                    const r = inst.queue.shift(); batch.push(r); tok += r.prompt; }
+                batch.forEach(r => r.prefillStart = now);
+                step(inst, inst.cm.prefill(batch.map(r => r.prompt)), batch.length, () => {
+                    for (const r of batch) { firstToken(r); if (r.output <= 1) finish(r); else kvRequest(r); }
+                });
+            } else if (inst.role === 'decode') {
+                while (inst.queue.length && inst.running.length < maxB && inst.kvUsed + kvNeed(inst.queue[0]) <= cm.kvCap) {
+                    const r = inst.queue.shift(); inst.kvUsed += kvNeed(r); r.decodeStart = now; inst.running.push(r); }
+                if (inst.running.length) decodeOnce(inst);
+            } else {
+                const batch = []; let tok = 0;
+                while (inst.queue.length && inst.running.length + batch.length < maxB
+                       && (!batch.length || tok + inst.queue[0].prompt <= maxPT)
+                       && inst.kvUsed + kvNeed(inst.queue[0]) <= cm.kvCap) {
+                    const r = inst.queue.shift(); inst.kvUsed += kvNeed(r); batch.push(r); tok += r.prompt; }
+                if (batch.length) {
+                    batch.forEach(r => r.prefillStart = now);
+                    step(inst, inst.cm.prefill(batch.map(r => r.prompt)), batch.length, () => {
+                        for (const r of batch) { firstToken(r);
+                            if (r.output <= 1) { inst.kvUsed -= kvNeed(r); finish(r); }
+                            else { r.decodeStart = now; inst.running.push(r); } }
+                    });
+                } else if (inst.running.length) decodeOnce(inst);
+            }
+        }
+        function kvRequest(r) { if (ls.inUse < link.ch) kvStart(r); else ls.queue.push(r); }
+        function kvStart(r) {
+            ls.inUse++; r.kvStart = now; ls.wait += now - r.firstToken;
+            const nbytes = r.prompt * model.kvTok, t = link.lat + nbytes / link.bw;
+            push(now + t, () => {
+                ls.inUse--; ls.busy += t; ls.bytes += nbytes; ls.transfers++; r.kvReady = now;
+                ls.energy += nbytes * 8 * link.pjBit * 1e-12;
+                if (ls.queue.length) kvStart(ls.queue.shift());
+                submit(pick(decode), r);
+            });
+        }
+        // arrivals
+        for (const r of reqs) push(r.arrival, () => {
+            const pool = cfg.mode === 'disagg' ? decode : coloc;
+            if (kvNeed(r) > cm.kvCap) { nRej++; r.rejected = true; if (nDone + nRej === reqs.length) stop = true; return; }
+            submit(pick(cfg.mode === 'disagg' ? prefill : pool), r);
+        });
+        // sampler (passive probe)
+        const dt = cfg.sampleDt || 0.25;
+        const sample = () => {
+            const row = { t: now, linkQ: ls.queue.length, prefillQ: 0, decodeQ: 0, running: 0 };
+            for (const i of insts) { if (i.role === 'prefill') row.prefillQ += i.queue.length;
+                else { row.decodeQ += i.queue.length; row.running += i.running.length; } }
+            samples.push(row); push(now + dt, sample);
+        };
+        push(0, sample);
+
+        while (heap.length && !stop) { const e = pop(); now = e[0]; e[2](); }
+        return { cfg, model, cm, reqs, insts, link: ls, linkCh: link.ch, horizon: now, samples };
+    }
+
+    // ── metrics (mirror of metrics.py) ─────────────────────────────────
+    function percentile(xs, p) {
+        if (!xs.length) return NaN;
+        const s = Float64Array.from(xs).sort(), k = (s.length - 1) * p / 100, lo = Math.floor(k), hi = Math.ceil(k);
+        return s[lo] + (s[hi] - s[lo]) * (k - lo);
+    }
+    const mean = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN;
+    const dist = xs => ({ mean: mean(xs), p50: percentile(xs, 50), p90: percentile(xs, 90), p99: percentile(xs, 99) });
+    function stages(r) {
+        const hand = r.kvReady !== null ? r.kvReady : r.firstToken;
+        const s = { prefill_queue: r.prefillStart - r.arrival, prefill: r.firstToken - r.prefillStart,
+                    kv_wait: 0, kv_transfer: 0, decode_queue: 0, decode: 0 };
+        if (r.kvStart !== null) { s.kv_wait = r.kvStart - r.firstToken; s.kv_transfer = r.kvReady - r.kvStart; }
+        if (r.decodeStart !== null) { s.decode_queue = r.decodeStart - hand; s.decode = r.finish - r.decodeStart; }
+        return s;
+    }
+    function summarise(res) {
+        const cfg = res.cfg, H = res.horizon;
+        const done = res.reqs.filter(r => r.finish !== null).sort((a, b) => a.arrival - b.arrival);
+        const steady = done.slice(Math.floor(done.length * (cfg.warmupFrac ?? 0.1)));
+        const ttft = steady.map(r => r.firstToken - r.arrival);
+        const tpot = steady.filter(r => r.output >= 2).map(r => (r.finish - r.firstToken) / (r.output - 1));
+        const itl = []; steady.forEach(r => { for (const x of r.itls) itl.push(x); });
+        const e2e = steady.map(r => r.finish - r.arrival);
+        const met = steady.filter(r => (r.firstToken - r.arrival) <= cfg.ttftSlo &&
+            (r.output < 2 || (r.finish - r.firstToken) / (r.output - 1) <= cfg.tpotSlo));
+        const win = steady.length > 1 ? steady[steady.length - 1].arrival - steady[0].arrival : NaN;
+        const util = {}; res.insts.forEach(i => util[i.name] = i.busy / H);
+        util['kv-link'] = res.link.busy / (res.linkCh * H);
+        const st = {}; STAGES.forEach(k => st[k] = mean(steady.map(r => stages(r)[k])));
+        const e2eMean = mean(e2e);
+        const waits = STAGES.filter(k => k !== 'decode');
+        const hot = waits.reduce((a, b) => st[b] > st[a] ? b : a, waits[0]);
+        let owner = OWNER[hot]; if (cfg.mode === 'colocated' && owner !== 'kv-link') owner = 'colocated';
+        const pool = Object.keys(util).filter(k => k.startsWith(owner));
+        const hotRes = pool.reduce((a, b) => util[b] > util[a] ? b : a, pool[0]);
+        const eff = {}; res.insts.forEach(i => eff[i.name] = {
+            mfu: i.flops / (H * res.cfgDev().F * res.cfg.devicesPerInstance),
+            mbu: i.bytes / (H * res.cfgDev().B * res.cfg.devicesPerInstance),
+            batch: i.steps ? i.batchSum / i.steps : 0 });
+        // energy: static power for the whole run + dynamic work + link (mirror of energy_report)
+        let st_ = 0, ce = 0, me = 0; const perE = {};
+        res.insts.forEach(i => { const s_ = i.cm.idleW * H; st_ += s_; ce += i.ec; me += i.em;
+            perE[i.name] = { avgW: (s_ + i.ec + i.em) / H, peakW: i.peakW, powerBoundFrac: i.busy ? i.powerBound / i.busy : 0 }; });
+        const outTok = done.reduce((s, r) => s + r.output, 0), totJ = st_ + ce + me + res.link.energy;
+        const energy = { totalJ: totJ, avgW: totJ / H, jPerTok: totJ / outTok, tokPerJ: outTok / totJ,
+            breakdown: { static: st_ / totJ, compute: ce / totJ, memory: me / totJ, link: res.link.energy / totJ }, perInstance: perE };
+        return {
+            mode: cfg.mode, completed: done.length, measured: steady.length, energy,
+            rejected: res.reqs.length - done.length,
+            ttft: dist(ttft), tpot: dist(tpot), itl: dist(itl), e2e: dist(e2e),
+            tokPerS: done.reduce((s, r) => s + r.output, 0) / H, reqPerS: done.length / H,
+            goodput: win > 0 ? met.length / win : NaN, sloAttain: steady.length ? met.length / steady.length : NaN,
+            util, eff, stages: st, stageShare: Object.fromEntries(STAGES.map(k => [k, st[k] / e2eMean])),
+            hot: { stage: hot, resource: hotRes, util: util[hotRes] },
+            kvLink: { GB: res.link.bytes / 1e9, meanWaitMs: 1e3 * res.link.wait / Math.max(1, res.link.transfers) },
+            raw: { ttft, itl }, samples: res.samples, horizon: H,
+        };
+    }
+    function run(cfg, rows) {
+        const res = simulate(cfg, rows);
+        res.cfgDev = () => DEVICES[cfg.device];
+        return summarise(res);
+    }
+    root.DisaggSim = { MODELS, DEVICES, LINKS, STAGES, derive, costModel, makeWorkload, simulate, summarise, run, percentile };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+    <script>
+    (function(){
+        const S = window.DisaggSim, $ = id => document.getElementById(id);
+        const model = S.derive(S.MODELS['llama3-70b']);
+        function step(cap, dvfs){
+            const dev = S.DEVICES[$('pw-dev').value], n = 4;
+            const cm = S.costModel(model, dev, n, 0.5e-3, cap, dvfs);
+            const k = +$('pw-size').value;
+            return { dev, cm, c: $('pw-kind').value === 'prefill' ? cm.prefill([128 * 2 ** k]) : cm.decode(Array(2 ** k).fill(2300)) };
+        }
+        function rec(){
+            const kind = $('pw-kind').value, k = +$('pw-size').value;
+            $('pw-size-val').textContent = kind === 'prefill' ? 128 * 2 ** k : 2 ** k;
+            const dev = S.DEVICES[$('pw-dev').value];
+            const capEl = $('pw-cap'); capEl.max = dev.tdp; capEl.min = dev.idle + 10;
+            if (+capEl.value > dev.tdp) capEl.value = dev.tdp;
+            if (+capEl.value < dev.idle + 10) capEl.value = dev.idle + 10;
+            const cap = +capEl.value, dvfs = $('pw-dvfs').value === '1';
+            $('pw-cap-val').textContent = cap;
+            const { c } = step(cap, dvfs);
+            const p = (dev.idle * 4 + (c.ec + c.em) / c.time) / 4;
+            $('pw-t').textContent = (c.time * 1e3).toFixed(1) + ' ms';
+            $('pw-p').textContent = p.toFixed(0) + ' W';
+            $('pw-e').textContent = (c.ec + c.em).toFixed(1) + ' J';
+            $('pw-b').textContent = c.bound;
+            const pts = [];
+            for (let w = dev.tdp; w >= dev.idle + 25; w -= 5) { const r = step(w, dvfs).c; pts.push({ w, t: r.time, e: r.ec + r.em + dev.idle * 4 * r.time }); }
+            draw(pts, { t: c.time, e: c.ec + c.em + dev.idle * 4 * c.time, w: cap });
+        }
+        function draw(pts, cur){
+            const cv = $('pw-canvas'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
+            g.clearRect(0, 0, W, H); g.font = '11px "Geist Mono", monospace';
+            const tmin = Math.min(...pts.map(p => p.t)), tmax = Math.max(...pts.map(p => p.t));
+            const emin = Math.min(...pts.map(p => p.e)), emax = Math.max(...pts.map(p => p.e));
+            const pad = (a, b) => (b - a) * 0.08 || a * 0.05 || 1;
+            const t0 = tmin - pad(tmin, tmax), t1 = tmax + pad(tmin, tmax), e0 = emin - pad(emin, emax), e1 = emax + pad(emin, emax);
+            const X = t => 70 + (t - t0) / (t1 - t0) * (W - 90), Y = e => H - 40 - (e - e0) / (e1 - e0) * (H - 60);
+            g.strokeStyle = '#3a322b'; g.strokeRect(70, 20, W - 90, H - 60);
+            g.fillStyle = '#a2978b';
+            g.fillText('step time (ms) →', W / 2 - 50, H - 8); g.fillText('total energy incl. static (J)', 75, 34);
+            [t0, (t0 + t1) / 2, t1].forEach(t => g.fillText((t * 1e3).toFixed(1), X(t) - 12, H - 24));
+            [e0, (e0 + e1) / 2, e1].forEach(e => g.fillText(e.toFixed(1), 8, Y(e) + 4));
+            g.strokeStyle = '#aabd59'; g.lineWidth = 2; g.beginPath();
+            pts.forEach((p, i) => i ? g.lineTo(X(p.t), Y(p.e)) : g.moveTo(X(p.t), Y(p.e))); g.stroke(); g.lineWidth = 1;
+            g.fillStyle = '#a2978b'; g.fillText(pts[0].w + ' W', X(pts[0].t) + 6, Y(pts[0].e) - 6);
+            const L = pts[pts.length - 1]; g.fillText(L.w + ' W', X(L.t) - 40, Y(L.e) - 8);
+            g.fillStyle = '#de805a'; g.beginPath(); g.arc(X(cur.t), Y(cur.e), 6, 0, 7); g.fill();
+            g.fillText('cap ' + cur.w + ' W', X(cur.t) + 9, Y(cur.e) + 14);
+        }
+        ['pw-dev','pw-kind','pw-size','pw-cap','pw-dvfs'].forEach(id => $(id).addEventListener('input', rec));
+        rec();
+    })();
+    </script>
+    <p style="font-size:0.85rem;">Things to notice: for prefill, tighter caps trade time for energy until static power (charged for the longer step) starts to dominate and total energy rises again. That minimum is the energy-optimal operating point: for a 2,048-token prefill on H100s it sits near a 160 W cap, at 186 J against 352 J uncapped, but at 2.2&times; the step time. For decode, the curve is flat in time over a wide range of caps: free savings.</p>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>System Results: Latency Against Energy</h2>
+    <p>Full runs: Llama-3-70B, 4&times;H100 per instance, 4 req/s, 2,048/256-token mean prompts/outputs, SLOs TTFT &le; 1 s and TPOT &le; 25 ms, 800 requests. Every row is <code>disagg-sim</code> with the flags shown.</p>
+    <div class="table-wrap">
+    <table>
+        <tr><th>Configuration</th><th>TTFT p99</th><th>TPOT p99</th><th>SLO met</th><th>Avg power</th><th>J / token</th></tr>
+        <tr><td>Colocated, 2 instances</td><td>681 ms</td><td>27.6 ms</td><td>97.8%</td><td>2,987 W</td><td>3.09</td></tr>
+        <tr><td>Disaggregated 1P1D</td><td>854 ms</td><td>15.3 ms</td><td>99.7%</td><td>2,687 W</td><td>2.77</td></tr>
+        <tr><td>&hellip; + <code>--dvfs</code></td><td>854 ms</td><td>15.3 ms</td><td>99.7%</td><td>2,570 W</td><td>2.65</td></tr>
+        <tr><td>&hellip; + <code>--decode-power-cap 250</code></td><td>854 ms</td><td>17.4 ms</td><td>99.7%</td><td>2,503 W</td><td>2.60</td></tr>
+        <tr><td>&hellip; + <code>--decode-power-cap 200</code></td><td>854 ms</td><td>27.7 ms</td><td><strong>1.7%</strong></td><td>2,283 W</td><td>2.43</td></tr>
+        <tr><td>1P1D, <code>--power-cap 400 --dvfs</code></td><td>1,240 ms</td><td>15.4 ms</td><td>95.3%</td><td>2,190 W</td><td>2.26</td></tr>
+        <tr><td>1P1D, <code>--power-cap 300 --dvfs</code></td><td>1,652 ms</td><td>15.4 ms</td><td>83.3%</td><td>2,013 W</td><td>2.08</td></tr>
+        <tr><td>2P1D, <code>--power-cap 400 --dvfs</code></td><td>689 ms</td><td>15.3 ms</td><td>100%</td><td>2,593 W</td><td>2.68</td></tr>
+    </table>
+    </div>
+    <ul>
+        <li><strong>Disaggregation saves about 10% energy per token</strong> here as well as fixing TPOT: no decode steps wasted waiting on prefills.</li>
+        <li><strong>Decode tolerates a cap down to about 250 W</strong> per device; at 200 W it falls off a cliff (the compute clock floor is reached and steps stretch past the TPOT SLO). Finding that cliff is exactly what the simulator is for.</li>
+        <li><strong>Capping everything saves the most energy but costs TTFT</strong>; adding a second, capped prefill instance buys the latency back at 2.68 J/token. That is a provisioning trade only a simulator can price: more silicon at lower power.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>Energy Proportionality: Static Power and Load</h2>
+    <p>An idle accelerator still burns its static power. At low load that is spread over few tokens.</p>
+    <div class="table-wrap">
+    <table>
+        <tr><th>Offered load (1P1D)</th><th>Avg power</th><th>J / output token</th><th>Static share of energy</th></tr>
+        <tr><td>0.5 req/s</td><td>1,475 W</td><td>11.8</td><td>54%</td></tr>
+        <tr><td>1 req/s</td><td>1,730 W</td><td>7.0</td><td>46%</td></tr>
+        <tr><td>2 req/s</td><td>2,066 W</td><td>4.2</td><td>39%</td></tr>
+        <tr><td>4 req/s</td><td>2,687 W</td><td>2.8</td><td>30%</td></tr>
+        <tr><td>6 req/s</td><td>3,253 W</td><td>2.3</td><td>25%</td></tr>
+    </table>
+    </div>
+    <ul>
+        <li><strong>Energy per token falls fivefold</strong> from light to heavy load: utilisation is an energy metric, not only a cost metric.</li>
+        <li><strong>Hence autoscaling and consolidation:</strong> fewer, busier instances plus power-gating idle ones. A simulator that models instance on/off transitions (with their latency) can evaluate such policies.</li>
+        <li><strong>Static-heavy hardware suffers most.</strong> The hypothetical optical part (cheap multiplies, 180 W of always-on lasers, tuning and converters) spends <strong>65%</strong> of its energy on static power at 4 req/s. It wins on latency, but at 2.29 J/token it is no more efficient than the GPU under a 400 W cap with DVFS (2.26). Keeping such hardware fully busy, or gating its static consumers, is an architectural requirement.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>From the Simulator to RTL Power and Thermal Analysis</h2>
+    <p>Power modelling follows the same fidelity ladder as timing (deck 01), and the levels feed each other the same way.</p>
+    <div class="table-wrap">
+    <table>
+        <tr><th>Level</th><th>Power method</th><th>Tools</th></tr>
+        <tr><td>Analytical / DES</td><td>Energy per event &times; event counts (this simulator)</td><td>Custom models; Accelergy for per-access energy tables</td></tr>
+        <tr><td>Architecture</td><td>Component power from structure: caches, NoCs, cores</td><td>McPAT, CACTI (SRAM/cache energy), Accelergy + Timeloop</td></tr>
+        <tr><td>RTL</td><td>Switching activity from simulation (SAIF, VCD, FSDB) applied to the netlist or RTL</td><td>Commercial RTL and gate-level power analysis tools</td></tr>
+        <tr><td>Emulation</td><td>Activity over real software runs, millions of cycles</td><td>Emulator-based dynamic power analysis</td></tr>
+        <tr><td>Silicon</td><td>Measurement</td><td>Board telemetry, DCGM, power analysers</td></tr>
+    </table>
+    </div>
+    <ul>
+        <li><strong>Simulator to RTL:</strong> the workload traces that drive performance verification also drive RTL power analysis, so activity factors reflect real inference, not toy vectors.</li>
+        <li><strong>RTL to simulator:</strong> per-operation energies extracted from RTL power runs replace the illustrative pJ/FLOP and pJ/byte. That is the power equivalent of cycle-count correlation, and its error belongs on the same correlation report.</li>
+        <li><strong>Thermal hot-spots:</strong> power is not uniform across a die. Power maps feed thermal models (HotSpot-style RC networks) that find thermal hot-spots, which in turn throttle clocks and close the loop back to timing. For photonics, temperature also shifts optical resonances, so thermal and functional behaviour are coupled.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-10">
+    <div class="slide-number">10</div>
+    <h2>Power in Photonic and Novel Compute</h2>
+    <p>An optical multiply can cost very little energy. A photonic <em>system</em> pays for everything around it, and a simulator must account for all of it.</p>
+    <div class="table-wrap">
+    <table>
+        <tr><th>Consumer</th><th>Behaviour</th><th>How to model it</th></tr>
+        <tr><td><strong>Lasers</strong></td><td>Continuous optical power, limited wall-plug efficiency; on whether or not work arrives</td><td>Static power, with gating policies and their wake-up latency</td></tr>
+        <tr><td><strong>Thermal tuning</strong></td><td>Heaters hold resonant devices on wavelength; depends on ambient and neighbouring heat</td><td>Static plus thermal-state dependent</td></tr>
+        <tr><td><strong>DACs and modulators</strong></td><td>Energy per conversion grows with sample rate and resolution</td><td>Per-sample energy &times; samples; a Walden-style figure of merit (energy &prop; 2<sup>ENOB</sup>)</td></tr>
+        <tr><td><strong>Photodetectors, TIAs and ADCs</strong></td><td>As above, on the way back to electronics</td><td>Per-sample energy; precision against power trade-off</td></tr>
+        <tr><td><strong>Digital pre- and post-processing</strong></td><td>Normalisation, accumulation, modular reduction (FHE), error correction</td><td>Ordinary pJ/op, as for any digital block</td></tr>
+        <tr><td><strong>Memory and data movement</strong></td><td>Same HBM and SRAM costs as everyone else</td><td>pJ/byte, as in this simulator</td></tr>
+    </table>
+    </div>
+    <div class="callout">
+        <div class="callout-label">The architectural consequence</div>
+        <p>The energy win of optics is realised only when each conversion is amortised over many optical operations (high reuse per sample) and the core is kept busy enough to amortise static power. Both are workload- and mapping-dependent, so they can only be judged by simulating real workloads through the full toolchain.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-11">
+    <div class="slide-number">11</div>
+    <h2>The Datacentre View</h2>
+    <ul>
+        <li><strong>Power oversubscription:</strong> provision more servers than the worst-case sum of TDPs allows, relying on statistical multiplexing and capping when needed. POLCA (Patel et al., 2023) studies this for LLM clusters, using the fact that inference rarely sustains peak power everywhere at once.</li>
+        <li><strong>Phase-aware power:</strong> Splitwise's power-capped token machines; per-pool caps in this simulator (<code>--prefill-power-cap</code>, <code>--decode-power-cap</code>).</li>
+        <li><strong>Energy-aware cluster control:</strong> DynamoLLM (2024) reconfigures instance counts, parallelism and GPU frequency with load to cut energy while meeting SLOs; the knobs are the ones the simulator exposes.</li>
+        <li><strong>Facility overheads:</strong> multiply IT energy by PUE (power usage effectiveness) for facility energy, and add embodied carbon if lifecycle impact is the question.</li>
+        <li><strong>Measure it:</strong> the ML.ENERGY leaderboard and its Zeus library measure real GPU energy per request and are a good source of baselines for validating a simulator's energy model on known hardware.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-12">
+    <div class="slide-number">12</div>
+    <h2>Power Metrics Checklist</h2>
+    <div class="table-wrap">
+    <table>
+        <tr><th>Metric</th><th>Question</th><th>In the simulator</th></tr>
+        <tr><td>Average power (W)</td><td>What does the deployment draw?</td><td><code>energy.avg_power_W</code></td></tr>
+        <tr><td>Peak step power (W)</td><td>Will it trip the board or rack limit?</td><td><code>per_instance.peak_step_w</code></td></tr>
+        <tr><td>Energy per output token (J)</td><td>What does a token cost?</td><td><code>J_per_output_token</code></td></tr>
+        <tr><td>Tokens per joule</td><td>Efficiency headline (equivalently, tokens/s per W)</td><td><code>output_tokens_per_J</code></td></tr>
+        <tr><td>Energy per SLO-meeting request</td><td>What does <em>useful</em> work cost?</td><td><code>J_per_slo_met_request</code></td></tr>
+        <tr><td>Energy breakdown</td><td>Static, compute, memory or link: where to optimise</td><td><code>energy.breakdown</code></td></tr>
+        <tr><td>Power-bound time fraction</td><td>Is the cap binding?</td><td><code>per_instance.power_bound_frac</code></td></tr>
+        <tr><td>Energy&ndash;delay product</td><td>A single figure balancing speed and energy</td><td>E &times; latency, from the above</td></tr>
+    </table>
+    </div>
+    <p>Treat these like latency metrics: report them per configuration, with confidence intervals, under common random numbers, and track the energy-model correlation error alongside the timing one.</p>
+</section>
+
+<section class="slide" id="slide-13">
+    <div class="slide-number">13</div>
+    <h2>What to Take Away</h2>
+    <ul>
+        <li><strong>Power and energy are simulator outputs</strong> on a par with latency; for novel compute they are often the headline.</li>
+        <li><strong>Price the counts you already have:</strong> static power &times; time, pJ/FLOP, pJ/byte, pJ/bit. Calibrate the coefficients by regression on measurements or RTL power runs.</li>
+        <li><strong>Data movement dominates energy</strong>, as it dominates decode time.</li>
+        <li><strong>Prefill runs near TDP; decode has slack.</strong> DVFS and per-pool caps exploit it; the power cap is a third roof.</li>
+        <li><strong>Energy per token depends strongly on load</strong> through static power; static-heavy hardware must be kept busy.</li>
+        <li><strong>The fidelity ladder applies to power too</strong>: simulator traces drive RTL power analysis, and RTL energies calibrate the simulator.</li>
+    </ul>
+    <div class="callout">
+        <div class="callout-label">Next</div>
+        <p>Deck 08 turns to the simulator's own speed: how to make it faster without changing a single answer.</p>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════ Footer ════════════════════════════════════ -->
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Inference_Simulators">LLM Inference Simulators series</a> &middot; code: <a href="https://github.com/BrendanJamesLynskey/Disaggregated_Inference_Sim">Disaggregated_Inference_Sim</a></p>
+    <p style="margin-top: 0.5rem; font-size: 0.8rem;"><a href="https://brendanjameslynskey.github.io/InfSim_06_Metrics_Hotspots_Validation/">&larr; 06 Metrics, Hot-Spots &amp; Validation</a> &nbsp;&middot;&nbsp; <a href="https://brendanjameslynskey.github.io/InfSim_08_Accelerating_Simulators/">08 Accelerating Inference Simulators &rarr;</a></p>
+    <p style="margin-top: 0.5rem; font-size: 0.8rem;"><a href="https://github.com/BrendanJamesLynskey/LLMs#hardware--inference">Back to the LLMs hub</a></p>
+</footer>
+
+<script>
+    // Smooth scroll for TOC links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    // Subtle fade-in on scroll
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(slide => {
+        slide.style.opacity = '0';
+        slide.style.transform = 'translateY(30px)';
+        slide.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(slide);
+    });
+</script>
+
+</body>
+</html>
