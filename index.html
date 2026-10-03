@@ -892,7 +892,7 @@ E_op      &asymp; &alpha; &middot; C &middot; V&sup2;                   <span cl
         <tr><td>64-bit read from DRAM</td><td>1.3&ndash;2.6 nJ</td><td>~40,000&ndash;90,000&times;</td></tr>
     </table>
     </div>
-    <p>Absolute values have fallen at newer nodes, but the ratios still hold. This is why the simulator charges separately for FLOPs and for HBM bytes, and why decode, which streams every weight on every step, is an energy problem as well as a bandwidth problem.</p>
+    <p>Absolute values have fallen at newer nodes, but the ratios still hold. This is why the simulator charges separately for FLOPs and for HBM bytes, and why decode, which streams almost every weight on every step (all but the input-embedding table, which is a lookup), is an energy problem as well as a bandwidth problem.</p>
 </section>
 
 <section class="slide" id="slide-03">
@@ -924,13 +924,13 @@ P_step  = idle_W + E_step / t_step                       <span class="cm"># trac
 <section class="slide" id="slide-04">
     <div class="slide-number">04</div>
     <h2>Prefill Runs Hot, Decode Runs Cool</h2>
-    <p>Per step, Llama-3-70B on 4&times;H100, from the simulator's cost model:</p>
+    <p>Per step, Llama-3-70B on 4&times;H100, from the simulator's cost model (as corrected on 2026-10-03; see slide 07):</p>
     <div class="table-wrap">
     <table>
         <tr><th>Step</th><th>Bound</th><th>Time</th><th>Power per device</th><th>Dynamic energy</th></tr>
-        <tr><td>Prefill, 2,048-token prompt</td><td>compute</td><td>133.9 ms</td><td><strong>658 W</strong> (near the 700 W TDP)</td><td>~290 J</td></tr>
-        <tr><td>Decode, batch 16, ~2.3k context</td><td>memory</td><td>14.8 ms</td><td><strong>295 W</strong></td><td>11.5 J</td></tr>
-        <tr><td>Decode, same, with DVFS</td><td>memory</td><td>14.8 ms</td><td><strong>262 W</strong></td><td>9.6 J</td></tr>
+        <tr><td>Prefill, 2,048-token prompt</td><td>compute</td><td>133.9 ms</td><td><strong>658 W</strong> (near the 700 W TDP)</td><td>299 J</td></tr>
+        <tr><td>Decode, batch 16, ~2.3k context</td><td>memory</td><td>14.6 ms</td><td><strong>295 W</strong></td><td>11.4 J</td></tr>
+        <tr><td>Decode, same, with DVFS</td><td>memory</td><td>14.6 ms</td><td><strong>262 W</strong></td><td>9.4 J</td></tr>
     </table>
     </div>
     <ul>
@@ -1012,8 +1012,11 @@ power cap:   choose the largest s with P(s) &le; cap                   <span cla
     function derive(m) {
         const hd = m.d / m.h, kv = m.kvh * hd;
         const ppl = 2 * m.d * m.d + 2 * m.d * kv + 3 * m.d * m.ff;
+        // weightBytes: resident (both vocab tables); weightStream: read by every step (layers +
+        // LM head); embRow: one embedding row, read per token looked up (corrected 2026-10-03)
         return { ...m, params: m.L * ppl + 2 * m.V * m.d, matmul: m.L * ppl + m.V * m.d,
-                 weightBytes: 2 * (m.L * ppl + 2 * m.V * m.d), kvTok: 2 * m.L * kv * 2 };
+                 weightBytes: 2 * (m.L * ppl + 2 * m.V * m.d), weightStream: 2 * (m.L * ppl + m.V * m.d),
+                 embRow: 2 * m.d, kvTok: 2 * m.L * kv * 2 };
     }
 
     const cbrt = x => Math.sign(x) * Math.pow(Math.abs(x), 1 / 3);
@@ -1051,12 +1054,14 @@ power cap:   choose the largest s with P(s) &le; cap                   <span cla
             prefill(lens) {
                 let tok = 0, fl = 0;
                 for (const s of lens) { tok += s; fl += 2 * model.L * model.d * s * (s + 1); }
-                return t(2 * model.matmul * tok + fl, model.weightBytes + tok * model.kvTok);
+                return t(2 * model.matmul * tok + fl, model.weightStream + tok * model.embRow + tok * model.kvTok);
             },
             decode(ctx) {
                 let c = 0; for (const x of ctx) c += x;
                 const b = ctx.length;
-                return t(2 * model.matmul * b + 4 * model.L * model.d * c, model.weightBytes + (c + b) * model.kvTok);
+                // each new token attends to its context and to itself: c + b positions
+                return t(2 * model.matmul * b + 4 * model.L * model.d * (c + b),
+                         model.weightStream + b * model.embRow + (c + b) * model.kvTok);
             },
         };
     }
@@ -1227,13 +1232,15 @@ power cap:   choose the largest s with P(s) &le; cap                   <span cla
     }
 
     // ── metrics (mirror of metrics.py) ─────────────────────────────────
-    function percentile(xs, p) {
-        if (!xs.length) return NaN;
-        const s = Float64Array.from(xs).sort(), k = (s.length - 1) * p / 100, lo = Math.floor(k), hi = Math.ceil(k);
+    function pctSorted(s, p) {
+        if (!s.length) return NaN;
+        const k = (s.length - 1) * p / 100, lo = Math.floor(k), hi = Math.ceil(k);
         return s[lo] + (s[hi] - s[lo]) * (k - lo);
     }
+    const percentile = (xs, p) => pctSorted(Float64Array.from(xs).sort(), p);
     const mean = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN;
-    const dist = xs => ({ mean: mean(xs), p50: percentile(xs, 50), p90: percentile(xs, 90), p99: percentile(xs, 99) });
+    const dist = xs => { const s = Float64Array.from(xs).sort();     // sort once for all three
+                         return { mean: mean(xs), p50: pctSorted(s, 50), p90: pctSorted(s, 90), p99: pctSorted(s, 99) }; };
     function stages(r) {
         const hand = r.kvReady !== null ? r.kvReady : r.firstToken;
         const s = { prefill_queue: r.prefillStart - r.arrival, prefill: r.firstToken - r.prefillStart,
@@ -1357,21 +1364,25 @@ power cap:   choose the largest s with P(s) &le; cap                   <span cla
     <div class="table-wrap">
     <table>
         <tr><th>Configuration</th><th>TTFT p99</th><th>TPOT p99</th><th>SLO met</th><th>Avg power</th><th>J / token</th></tr>
-        <tr><td>Colocated, 2 instances</td><td>681 ms</td><td>27.6 ms</td><td>97.8%</td><td>2,987 W</td><td>3.09</td></tr>
-        <tr><td>Disaggregated 1P1D</td><td>854 ms</td><td>15.3 ms</td><td>99.7%</td><td>2,687 W</td><td>2.77</td></tr>
-        <tr><td>&hellip; + <code>--dvfs</code></td><td>854 ms</td><td>15.3 ms</td><td>99.7%</td><td>2,570 W</td><td>2.65</td></tr>
-        <tr><td>&hellip; + <code>--decode-power-cap 250</code></td><td>854 ms</td><td>17.4 ms</td><td>99.7%</td><td>2,503 W</td><td>2.60</td></tr>
-        <tr><td>&hellip; + <code>--decode-power-cap 200</code></td><td>854 ms</td><td>27.7 ms</td><td><strong>1.7%</strong></td><td>2,283 W</td><td>2.43</td></tr>
-        <tr><td>1P1D, <code>--power-cap 400 --dvfs</code></td><td>1,240 ms</td><td>15.4 ms</td><td>95.3%</td><td>2,190 W</td><td>2.26</td></tr>
-        <tr><td>1P1D, <code>--power-cap 300 --dvfs</code></td><td>1,652 ms</td><td>15.4 ms</td><td>83.3%</td><td>2,013 W</td><td>2.08</td></tr>
-        <tr><td>2P1D, <code>--power-cap 400 --dvfs</code></td><td>689 ms</td><td>15.3 ms</td><td>100%</td><td>2,593 W</td><td>2.68</td></tr>
+        <tr><td>Colocated, 2 instances</td><td>630 ms</td><td>25.9 ms</td><td>97.8%</td><td>2,993 W</td><td>3.09</td></tr>
+        <tr><td>Disaggregated 1P1D</td><td>854 ms</td><td>15.2 ms</td><td>99.7%</td><td>2,687 W</td><td>2.77</td></tr>
+        <tr><td>&hellip; + <code>--dvfs</code></td><td>854 ms</td><td>15.2 ms</td><td>99.7%</td><td>2,570 W</td><td>2.65</td></tr>
+        <tr><td>&hellip; + <code>--decode-power-cap 250</code></td><td>854 ms</td><td>17.2 ms</td><td>99.7%</td><td>2,503 W</td><td>2.59</td></tr>
+        <tr><td>&hellip; + <code>--decode-power-cap 200</code></td><td>854 ms</td><td>27.2 ms</td><td><strong>12.6%</strong></td><td>2,284 W</td><td>2.43</td></tr>
+        <tr><td>1P1D, <code>--power-cap 400 --dvfs</code></td><td>1,240 ms</td><td>15.2 ms</td><td>95.3%</td><td>2,190 W</td><td>2.26</td></tr>
+        <tr><td>1P1D, <code>--power-cap 300 --dvfs</code></td><td>1,651 ms</td><td>15.2 ms</td><td>83.3%</td><td>2,013 W</td><td>2.08</td></tr>
+        <tr><td>2P1D, <code>--power-cap 400 --dvfs</code></td><td>689 ms</td><td>15.1 ms</td><td>100%</td><td>2,593 W</td><td>2.68</td></tr>
     </table>
     </div>
     <ul>
         <li><strong>Disaggregation saves about 10% energy per token</strong> here as well as fixing TPOT: no decode steps wasted waiting on prefills.</li>
-        <li><strong>Decode tolerates a cap down to about 250 W</strong> per device; at 200 W it falls off a cliff (the compute clock floor is reached and steps stretch past the TPOT SLO). Finding that cliff is exactly what the simulator is for.</li>
+        <li><strong>Decode tolerates a cap down to about 250 W</strong> per device; at 200 W it falls off a cliff (the compute clock floor is reached and steps stretch past the TPOT SLO): only 12.6% of requests meet the SLOs. Finding that cliff is exactly what the simulator is for.</li>
         <li><strong>Capping everything saves the most energy but costs TTFT</strong>; adding a second, capped prefill instance buys the latency back at 2.68 J/token. That is a provisioning trade only a simulator can price: more silicon at lower power.</li>
     </ul>
+    <div class="callout">
+        <div class="callout-label">Cost model corrected, 2026-10-03</div>
+        <p>Every step had been charged the whole input-embedding table, where a lookup reads only the rows it uses. And decode attention had left out each new token's attention to itself. Tracing the real model found both (<a href="https://brendanjameslynskey.github.io/SimEng_10_PyTorch_ONNX_Frontends/#slide-09">Toolkit deck 10</a>). All the tables in this deck were rerun with the corrected model. Decode TPOT fell slightly. The J/token ranking, the power-bound flags and the hot-spots did not change. The 200 W cliff remains, though 12.6% of requests now meet the SLOs, against 1.7% before. Before and after: <a href="https://github.com/BrendanJamesLynskey/Disaggregated_Inference_Sim/blob/main/examples/results.md">examples/results.md</a>.</p>
+    </div>
 </section>
 
 <section class="slide" id="slide-08">
@@ -1381,17 +1392,17 @@ power cap:   choose the largest s with P(s) &le; cap                   <span cla
     <div class="table-wrap">
     <table>
         <tr><th>Offered load (1P1D)</th><th>Avg power</th><th>J / output token</th><th>Static share of energy</th></tr>
-        <tr><td>0.5 req/s</td><td>1,475 W</td><td>11.8</td><td>54%</td></tr>
-        <tr><td>1 req/s</td><td>1,730 W</td><td>7.0</td><td>46%</td></tr>
+        <tr><td>0.5 req/s</td><td>1,472 W</td><td>11.8</td><td>54%</td></tr>
+        <tr><td>1 req/s</td><td>1,729 W</td><td>7.0</td><td>46%</td></tr>
         <tr><td>2 req/s</td><td>2,066 W</td><td>4.2</td><td>39%</td></tr>
         <tr><td>4 req/s</td><td>2,687 W</td><td>2.8</td><td>30%</td></tr>
-        <tr><td>6 req/s</td><td>3,253 W</td><td>2.3</td><td>25%</td></tr>
+        <tr><td>6 req/s</td><td>3,254 W</td><td>2.3</td><td>25%</td></tr>
     </table>
     </div>
     <ul>
         <li><strong>Energy per token falls fivefold</strong> from light to heavy load: utilisation is an energy metric, not only a cost metric.</li>
         <li><strong>Hence autoscaling and consolidation:</strong> fewer, busier instances plus power-gating idle ones. A simulator that models instance on/off transitions (with their latency) can evaluate such policies.</li>
-        <li><strong>Static-heavy hardware suffers most.</strong> The hypothetical optical part (cheap multiplies, 180 W of always-on lasers, tuning and converters) spends <strong>65%</strong> of its energy on static power at 4 req/s. It wins on latency, but at 2.29 J/token it is no more efficient than the GPU under a 400 W cap with DVFS (2.26). Keeping such hardware fully busy, or gating its static consumers, is an architectural requirement.</li>
+        <li><strong>Static-heavy hardware suffers most.</strong> The hypothetical optical part (cheap multiplies, 180 W of always-on lasers, tuning and converters) spends <strong>65%</strong> of its energy on static power at 4 req/s. It wins on latency, but at 2.28 J/token it is no more efficient than the GPU under a 400 W cap with DVFS (2.26). Keeping such hardware fully busy, or gating its static consumers, is an architectural requirement.</li>
     </ul>
 </section>
 
